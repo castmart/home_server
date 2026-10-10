@@ -13,11 +13,15 @@ to run at the same time.
 | Transport | Through Cloudflare's edge | Direct WireGuard, usually peer-to-peer |
 | Upload size cap | 100 MB per request on the free plan | None |
 | Media streaming | Against Cloudflare's terms for non-HTML content at volume | Fine |
-| Good for | Sharing an album with family who won't install anything | Your own devices, full-size photo and video sync |
+| Exposed to the internet | Yes — a public hostname | No — tailnet only |
+| Good for | Sharing with people who won't install anything | Your own devices |
 
-The 100 MB cap is the practical reason this setup moved to V2: Immich uploads of
-full-length videos fail through a free-plan tunnel, and Cloudflare's terms discourage
-proxying a media library at volume.
+This setup moved to V2 for two reasons: the server stops being reachable from
+the public internet at all, and there is far less to configure and keep
+configured. V1 means a domain on Cloudflare, a tunnel, per-hostname routes, DNS
+records and Access policies — each one a place to get it wrong, and the result
+is still a public URL that has to be defended. V2 is one package on the host
+and a login; nothing is published, so there is no attack surface to harden.
 
 ## Which one is active
 

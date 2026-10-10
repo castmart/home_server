@@ -72,12 +72,12 @@ both documented in full in [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md):
 
 - **V2 — Tailscale** (default). Installed as a system service on the host, not
   as a container. Services are reachable at the host's tailnet address from any
-  device signed into your tailnet. No domain, no public exposure, no upload size
-  limit.
+  device signed into your tailnet. Nothing is published to the internet, and
+  setup is one package plus a login — no domain, no DNS records, no policies.
 - **V1 — Cloudflare Tunnel**. The `cloudflared` container, behind the
   `cloudflare` compose profile. Gives a public URL that anyone can open without
-  installing anything, at the cost of a 100 MB per-request upload cap on the
-  free plan.
+  installing anything, at the cost of a domain, per-hostname routing and access
+  policies to configure — and a server exposed to the internet.
 
 Select the mode in `.env`:
 
