@@ -1,1 +1,4 @@
 .env
+
+# Syncthing device identity: key.pem, cert.pem and the hashed GUI password
+syncthing/config/

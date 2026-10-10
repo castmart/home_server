@@ -1,6 +1,6 @@
 # In‑House Photo Backup Server with Immich
 
-A minimal Docker Compose configuration to run your own private photo and video backup server using [Immich](https://immich.app), plus Kavita for books and comics, Pi‑hole for network‑wide ad‑blocking, and a choice of Tailscale or a Cloudflare Tunnel for secure remote access.
+A minimal Docker Compose configuration to run your own private photo and video backup server using [Immich](https://immich.app), plus Kavita for books and comics, Syncthing for file sync, Pi‑hole for network‑wide ad‑blocking, and a choice of Tailscale or a Cloudflare Tunnel for secure remote access.
 
 ## Overview
 
@@ -9,6 +9,7 @@ This setup provides:
 - **Pi‑hole** – Network‑level DNS‑based ad/tracker blocking
 - **Remote access** – Tailscale on the host (default), or a Cloudflare Tunnel container (see [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md))
 - **Kavita** – Self‑hosted reading server for books, manga and comics
+- **Syncthing** – Continuous peer‑to‑peer file sync (used here for an Obsidian vault)
 
 All services run in Docker containers, with data stored on the host filesystem.
 
@@ -35,6 +36,7 @@ All services run in Docker containers, with data stored on the host filesystem.
    - Immich: http://localhost:2283
    - Pi‑hole admin: http://localhost:8080 (password in `.env`)
    - Kavita: http://localhost:5000
+   - Syncthing: http://localhost:8384
    - Remote access: see [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md)
 
 ## Services
@@ -48,6 +50,8 @@ All services run in Docker containers, with data stored on the host filesystem.
 | `pihole` | 53 (TCP/UDP), 8080 | DNS server and admin UI |
 | `cloudflared` | – | Cloudflare Tunnel agent — only with `COMPOSE_PROFILES=cloudflare` |
 | `kavita` | 5000 | Reading server for books, manga and comics |
+| `syncthing` | 8384, 22000, 21027 | File sync daemon and web GUI |
+| `syncthing‑init` | – | One‑shot: writes GUI credentials before the daemon starts |
 
 **Note**: The ML container (`immich‑machine‑learning`) is intentionally omitted; facial recognition and object detection will be unavailable unless added.
 
@@ -63,6 +67,9 @@ Key environment variables (set in `.env`):
 | `PIHOLE_PASSWORD` | Pi‑hole web interface password | `your‑password` |
 | `COMPOSE_PROFILES` | Remote access mode: empty for Tailscale, `cloudflare` for the tunnel | `(empty)` |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel token (V1 only) | `(from Cloudflare dashboard)` |
+| `SYNCTHING_GUI_USER` | Syncthing web GUI username (**required**) | `admin` |
+| `SYNCTHING_GUI_PASSWORD` | Syncthing web GUI password (**required**) | `your‑password` |
+| `OBSIDIAN_PATH` | Host path to the synced vault | `/mnt/data/syncthing/obsidian` |
 | `DB_PASSWORD` | PostgreSQL password | `postgres` |
 
 ## Remote Access
@@ -96,6 +103,8 @@ All data is stored on the host via bind mounts:
 - `./pihole/etc‑dnsmasq.d` – Pi‑hole DNS settings
 - `/mnt/data/kavita/{books,manga,comics}` – Kavita library shelves
 - `/mnt/data/kavita/saved/config` – Kavita database and settings
+- `./syncthing/config` – Syncthing device identity and settings (gitignored — holds the device private key)
+- `/mnt/data/syncthing/obsidian` – the synced Obsidian vault
 
 Data survives container removal; backup these directories.
 
@@ -193,12 +202,83 @@ fails outright. `scp` on OpenSSH 9+ speaks SFTP, where the remote path is taken
 literally, so local quoting is all that is needed. For bulk or resumable
 transfers, install a current rsync (`brew install rsync`) and use `-s`.
 
+## Syncthing
+
+Continuous two-way sync between the server and your devices. Set up here for an
+Obsidian vault, but any folder works the same way.
+
+### First run
+
+The host directories must exist and be owned by the UID Syncthing runs as. The
+container's entrypoint only chowns `/var/syncthing`, not the bind-mounted
+subdirectories, so a root-owned directory will fail to write:
+
+```bash
+sudo install -d -o 1000 -g 1000 /mnt/data/syncthing/obsidian
+```
+
+Set `SYNCTHING_GUI_USER` and `SYNCTHING_GUI_PASSWORD` in `.env`, then:
+
+```bash
+docker compose up -d
+```
+
+`syncthing-init` runs `syncthing generate` to completion first, writing the
+device identity and the bcrypt-hashed GUI password, and only then does the
+daemon start. The GUI at `http://<host>:8384` asks for those credentials
+immediately.
+
+`.env` stays the source of truth for the password: every `docker compose up -d`
+re-applies it, so a password changed in the web UI is reverted on the next
+start. Change it in `.env` instead.
+
+### Pairing a device
+
+1. Install Syncthing on the laptop or phone and open its own GUI.
+2. On the server, *Actions → Show ID* and copy the device ID.
+3. On the client, *Add Remote Device*, paste the ID, and accept the prompt that
+   appears back on the server.
+4. On the server, *Add Folder* with path `/var/syncthing/obsidian`, then share
+   it with the new device under the *Sharing* tab.
+
+Both ends must agree before anything moves — the pairing is symmetric, and a
+device you have not accepted on the server cannot pull anything.
+
+### Obsidian-specific ignores
+
+An Obsidian vault contains files that change on every keystroke or that are
+machine-specific, and syncing them produces a steady stream of conflict
+copies. Add a `.stignore` in the folder root, via *Folder → Edit → Ignore
+Patterns*:
+
+```
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.trash
+.DS_Store
+```
+
+Keep the rest of `.obsidian/` synced if you want plugins and settings to follow
+you between machines. Turn on *File Versioning* (Simple, a few versions) on the
+folder as well: Syncthing resolves a genuine conflict by renaming one side to
+`*.sync-conflict-*`, and versioning is what lets you recover the other.
+
+### Over Tailscale
+
+Syncthing finds peers on the LAN by broadcast on 21027, which does not cross
+networks. With Tailscale on both ends, add the server's tailnet address
+explicitly on the client as `tcp://<machine>.<tailnet>.ts.net:22000` under the
+remote device's *Addresses* field, and sync keeps working from anywhere without
+relying on Syncthing's public relays.
+
 ## Notes
 
 - **Immich microservices**: This setup splits `immich‑server` and `immich‑microservices` for background job processing, unlike the official single‑container default.
 - **Remote access**: Two documented approaches — Tailscale installed on the host (default) and a `cloudflared` container behind the `cloudflare` compose profile. Setup, trade-offs and the steps to retire the tunnel are in [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md).
 - **Pi‑hole**: Admin UI runs on port 8080 to avoid conflicts with other web services.
 - **Database**: Uses `tensorchord/pgvecto‑rs` for vector similarity search (required by Immich).
+- **Syncthing**: The GUI is published on the LAN, and Syncthing has no authentication out of the box. A one‑shot `syncthing‑init` service writes credentials from `.env` before the daemon starts, so there is never a window where the UI is open. Compose refuses to run until `SYNCTHING_GUI_USER` and `SYNCTHING_GUI_PASSWORD` are set — including for the other services.
 
 ## License
 
@@ -207,4 +287,5 @@ Immich: [AGPL‑3.0](https://github.com/immich‑app/immich/blob/main/LICENSE)
 Pi‑hole: [EUPL‑1.2](https://github.com/pi‑hole/pi‑hole/blob/master/LICENSE)  
 Kavita: [GPL‑3.0](https://github.com/Kareadita/Kavita/blob/develop/LICENSE)  
 Cloudflare Tunnel: proprietary  
-Tailscale client: [BSD‑3‑Clause](https://github.com/tailscale/tailscale/blob/main/LICENSE)
+Tailscale client: [BSD‑3‑Clause](https://github.com/tailscale/tailscale/blob/main/LICENSE)  
+Syncthing: [MPL‑2.0](https://github.com/syncthing/syncthing/blob/main/LICENSE)
