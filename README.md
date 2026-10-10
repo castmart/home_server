@@ -1,13 +1,13 @@
 # In‑House Photo Backup Server with Immich
 
-A minimal Docker Compose configuration to run your own private photo and video backup server using [Immich](https://immich.app), plus Pi‑hole for network‑wide ad‑blocking and Cloudflare Tunnel for secure remote access.
+A minimal Docker Compose configuration to run your own private photo and video backup server using [Immich](https://immich.app), plus Kavita for books and comics, Pi‑hole for network‑wide ad‑blocking, and a choice of Tailscale or a Cloudflare Tunnel for secure remote access.
 
 ## Overview
 
 This setup provides:
 - **Immich** – Self‑hosted photo/video backup (Google Photos alternative)
 - **Pi‑hole** – Network‑level DNS‑based ad/tracker blocking
-- **Cloudflare Tunnel** – Secure remote access without port‑forwarding
+- **Remote access** – Tailscale on the host (default), or a Cloudflare Tunnel container (see [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md))
 - **Kavita** – Self‑hosted reading server for books, manga and comics
 
 All services run in Docker containers, with data stored on the host filesystem.
@@ -22,7 +22,7 @@ All services run in Docker containers, with data stored on the host filesystem.
 
 2. **Configure environment**
    ```bash
-   cp .env.example .env  # if available, or create from scratch
+   cp .env.example .env
    # Edit .env with your settings (see Configuration below)
    ```
 
@@ -35,7 +35,7 @@ All services run in Docker containers, with data stored on the host filesystem.
    - Immich: http://localhost:2283
    - Pi‑hole admin: http://localhost:8080 (password in `.env`)
    - Kavita: http://localhost:5000
-   - Cloudflare Tunnel: configure at [dashboard.cloudflare.com](https://dash.cloudflare.com/)
+   - Remote access: see [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md)
 
 ## Services
 
@@ -46,7 +46,7 @@ All services run in Docker containers, with data stored on the host filesystem.
 | `immich‑postgres` | – | Database (PostgreSQL + vector extension) |
 | `immich‑redis` | – | Job queue |
 | `pihole` | 53 (TCP/UDP), 8080 | DNS server and admin UI |
-| `cloudflared` | – | Cloudflare Tunnel agent |
+| `cloudflared` | – | Cloudflare Tunnel agent — only with `COMPOSE_PROFILES=cloudflare` |
 | `kavita` | 5000 | Reading server for books, manga and comics |
 
 **Note**: The ML container (`immich‑machine‑learning`) is intentionally omitted; facial recognition and object detection will be unavailable unless added.
@@ -61,8 +61,30 @@ Key environment variables (set in `.env`):
 | `IMMICH_VERSION` | Immich container tag | `release` |
 | `TZ` | Timezone | `America/New_York` |
 | `PIHOLE_PASSWORD` | Pi‑hole web interface password | `your‑password` |
-| `TUNNEL_TOKEN` | Cloudflare Tunnel token | `(from Cloudflare dashboard)` |
+| `COMPOSE_PROFILES` | Remote access mode: empty for Tailscale, `cloudflare` for the tunnel | `(empty)` |
+| `TUNNEL_TOKEN` | Cloudflare Tunnel token (V1 only) | `(from Cloudflare dashboard)` |
 | `DB_PASSWORD` | PostgreSQL password | `postgres` |
+
+## Remote Access
+
+Reaching the server from outside the house is a choice between two approaches,
+both documented in full in [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md):
+
+- **V2 — Tailscale** (default). Installed as a system service on the host, not
+  as a container. Services are reachable at the host's tailnet address from any
+  device signed into your tailnet. Nothing is published to the internet, and
+  setup is one package plus a login — no domain, no DNS records, no policies.
+- **V1 — Cloudflare Tunnel**. The `cloudflared` container, behind the
+  `cloudflare` compose profile. Gives a public URL that anyone can open without
+  installing anything, at the cost of a domain, per-hostname routing and access
+  policies to configure — and a server exposed to the internet.
+
+Select the mode in `.env`:
+
+```bash
+COMPOSE_PROFILES=            # Tailscale
+COMPOSE_PROFILES=cloudflare  # Cloudflare Tunnel
+```
 
 ## Data Persistence
 
@@ -174,7 +196,7 @@ transfers, install a current rsync (`brew install rsync`) and use `-s`.
 ## Notes
 
 - **Immich microservices**: This setup splits `immich‑server` and `immich‑microservices` for background job processing, unlike the official single‑container default.
-- **Cloudflare Tunnel**: The tunnel container currently uses Docker Compose’s default network; if your Cloudflare dashboard points to `localhost:2283`, add `network_mode: host` to the service.
+- **Remote access**: Two documented approaches — Tailscale installed on the host (default) and a `cloudflared` container behind the `cloudflare` compose profile. Setup, trade-offs and the steps to retire the tunnel are in [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md).
 - **Pi‑hole**: Admin UI runs on port 8080 to avoid conflicts with other web services.
 - **Database**: Uses `tensorchord/pgvecto‑rs` for vector similarity search (required by Immich).
 
@@ -183,4 +205,6 @@ transfers, install a current rsync (`brew install rsync`) and use `-s`.
 Project configuration: MIT  
 Immich: [AGPL‑3.0](https://github.com/immich‑app/immich/blob/main/LICENSE)  
 Pi‑hole: [EUPL‑1.2](https://github.com/pi‑hole/pi‑hole/blob/master/LICENSE)  
-Cloudflare Tunnel: proprietary
+Kavita: [GPL‑3.0](https://github.com/Kareadita/Kavita/blob/develop/LICENSE)  
+Cloudflare Tunnel: proprietary  
+Tailscale client: [BSD‑3‑Clause](https://github.com/tailscale/tailscale/blob/main/LICENSE)

@@ -59,15 +59,20 @@ services:
       - './pihole/etc-dnsmasq.d:/etc/dnsmasq.d'
     restart: unless-stopped
 
-  # ── Cloudflare Tunnel ────────────────────────────────
+  # ── Cloudflare Tunnel (remote access V1 — opt-in) ────
+  # Only starts when the "cloudflare" profile is active:
+  #   COMPOSE_PROFILES=cloudflare in .env, or `--profile cloudflare` on the CLI.
+  # V2 runs Tailscale on the host instead and needs no container here.
+  # See REMOTE_ACCESS_SETUP.md.
   cloudflared:
+    profiles: ["cloudflare"]
     depends_on:
       - immich-server
     container_name: cloudflared
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run
     environment:
-      TUNNEL_TOKEN: ${TUNNEL_TOKEN}
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     restart: unless-stopped
 
   # ── Kavita ────────────────────────────────
