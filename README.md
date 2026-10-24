@@ -257,6 +257,16 @@ device you have not accepted on the server cannot pull anything. If the new
 device starts empty, set its folder to *Receive Only* until the first sync
 finishes.
 
+**On mobile, don't look in the Play Store.** The official Syncthing Android app
+was discontinued in 2024, and both it and the community fork were pulled from
+Google Play because Syncthing needs the "all files access" permission. Install
+[Syncthing-Fork](https://github.com/Catfriend1/syncthing-android) from F-Droid
+or its GitHub releases instead, and exempt it from battery optimisation or
+Android will kill it in the background. Syncthing has no official iOS client;
+third-party apps exist, but check one is still maintained before trusting notes
+to it. Step-by-step in
+[SYNCTHING_FIRST_RUN.md](SYNCTHING_FIRST_RUN.md#part-5--add-a-phone).
+
 ### Obsidian-specific ignores
 
 An Obsidian vault contains files that change on every keystroke or that are

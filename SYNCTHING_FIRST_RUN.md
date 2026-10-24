@@ -136,10 +136,16 @@ receive the files. It must not send its empty directory.
 
 23. Install Syncthing on the laptop.
 
-24. On the laptop, add the vault folder.
+24. On the laptop, open `http://127.0.0.1:8384`.
 
-25. On the laptop, add the ignore patterns to that folder. Do this step before
-    step 27.
+**CAUTION: The two interfaces use the same port, 8384. The laptop uses the
+address `127.0.0.1`. The server uses its own network address. Read the device
+name at the top of the page before each step.**
+
+25. On the laptop, add the vault folder.
+
+26. On the laptop, add the ignore patterns to that folder. Do this step before
+    step 30.
 
     ```
     .obsidian/workspace.json
@@ -152,34 +158,93 @@ receive the files. It must not send its empty directory.
     These files change very often, or they apply to one machine only. They make
     conflict copies if you sync them.
 
-26. On the laptop, add the server as a remote device. Use the device ID from
-    step 18.
+27. On the laptop, click **Add Remote Device**.
 
-27. On the server, accept the new device.
+    If the laptop and the server are on the same local network, the server shows
+    in the **Nearby Devices** list. Click the server to fill in the device ID.
+    If the list is empty, type the device ID from step 18.
 
-28. On the laptop, share the folder with the server.
+    To connect over Tailscale, click **Advanced**. In the **Addresses** field,
+    replace `dynamic` with `tcp://<machine>.<tailnet>.ts.net:22000`. A local
+    network finds devices with a broadcast, and a broadcast does not go across
+    networks.
 
-29. On the server, accept the folder. Set the folder path to
+28. On the server, accept the new device.
+
+29. On the laptop, make sure that the server shows **Connected (Unused)**.
+
+    This status is correct at this point. The two devices talk to each other,
+    but they share no folder yet. The folder shows **Unshared** for the same
+    reason.
+
+30. On the laptop, click the folder. Click **Edit**, then click **Sharing**.
+    Select the server, then click **Save**.
+
+31. On the server, a message asks you to add the folder. Set the folder path to
     `/var/syncthing/obsidian`.
 
-30. On the server, set the folder type to **Receive Only**.
+**CAUTION: Use the path inside the container, `/var/syncthing/obsidian`. Do not
+use the path on the host, `/mnt/data/syncthing/obsidian`. Syncthing runs in the
+container and sees only the container path. The host path makes a directory in
+the container that a restart removes.**
 
-**CAUTION: Obey step 30. The server directory is empty. An empty directory can
-delete the files on the laptop if the two folder types are Send & Receive.**
+32. In the same dialog, click **Advanced**. Set the folder type to **Receive
+    Only**. Then click **Save**.
 
-31. Wait until the server shows **Up to Date**.
+**CAUTION: Obey step 32 before you save. The server directory is empty. An empty
+directory can delete the files on the laptop if the two folder types are Send &
+Receive.**
 
-32. Make sure that the files are in the server directory.
+33. Wait until the server shows **Up to Date**.
+
+34. Make sure that the files are in the server directory.
 
     ```bash
     ls -la /mnt/data/syncthing/obsidian
     ```
 
-33. On the server, set the folder type to **Send & Receive**.
+35. On the server, set the folder type to **Send & Receive**.
 
-34. On the server, set **File Versioning** to Simple for that folder. Syncthing
+36. On the server, set **File Versioning** to Simple for that folder. Syncthing
     renames one side of a true conflict to `*.sync-conflict-*`. File versioning
     lets you get the other side back.
+
+## Part 5 — Add a phone
+
+Do this part after Part 4. The server now holds the vault, and the phone is
+empty.
+
+**CAUTION: The official Syncthing application for Android was discontinued in
+2024. Google Play removed the official application and the community fork,
+because Syncthing needs the "all files access" permission. Do not look for them
+in Google Play.**
+
+37. For Android, install **Syncthing-Fork** from F-Droid, or from its releases
+    page on GitHub. It is the maintained community application.
+
+38. For iOS, know that Syncthing has no official application. Third-party
+    applications exist. Check that one is maintained before you trust your notes
+    to it.
+
+39. On the phone, add the server as a remote device. Use the device ID from
+    step 18.
+
+40. On the server, accept the new device.
+
+41. On the server, click the folder. Click **Edit**, then click **Sharing**.
+    Select the phone, then click **Save**.
+
+42. On the phone, accept the folder. Set the folder type to **Receive Only**
+    before you save it.
+
+43. Wait until the phone shows **Up to Date**.
+
+44. On the phone, set the folder type to **Send & Receive**. Do this step only
+    if you want to change the notes on the phone. A Receive Only folder cannot
+    send your changes back.
+
+45. On Android, remove the battery optimization for the application. Android
+    stops a background application that it optimizes, and the sync stops too.
 
 ## After the first run
 
