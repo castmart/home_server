@@ -27,12 +27,18 @@ All services run in Docker containers, with data stored on the host filesystem.
    # Edit .env with your settings (see Configuration below)
    ```
 
-3. **Start services**
+3. **Prepare Syncthing** — required before the first start
+
+   Syncthing needs two variables in `.env` and two host directories owned by
+   UID 1000. Without them `docker compose` refuses to run at all, for every
+   service. Follow [SYNCTHING_FIRST_RUN.md](SYNCTHING_FIRST_RUN.md) now.
+
+4. **Start services**
    ```bash
    docker compose up -d
    ```
 
-4. **Access services**
+5. **Access services**
    - Immich: http://localhost:2283
    - Pi‑hole admin: http://localhost:8080 (password in `.env`)
    - Kavita: http://localhost:5000
@@ -207,42 +213,49 @@ transfers, install a current rsync (`brew install rsync`) and use `-s`.
 Continuous two-way sync between the server and your devices. Set up here for an
 Obsidian vault, but any folder works the same way.
 
-### First run
+### ⚠️ Before the first run
 
-The host directories must exist and be owned by the UID Syncthing runs as. The
-container's entrypoint only chowns `/var/syncthing`, not the bind-mounted
-subdirectories, so a root-owned directory will fail to write:
+**Read [SYNCTHING_FIRST_RUN.md](SYNCTHING_FIRST_RUN.md) and follow it in order.**
+It is the ordered procedure for a server with no Syncthing data yet: the
+variables, the host directories and their ownership, the identity check, and
+pairing the first device safely.
 
-```bash
-sudo install -d -o 1000 -g 1000 /mnt/data/syncthing/obsidian
-```
+Two of those steps exist because skipping them causes real damage, so they are
+worth repeating here:
 
-Set `SYNCTHING_GUI_USER` and `SYNCTHING_GUI_PASSWORD` in `.env`, then:
+- **Set `SYNCTHING_GUI_USER` and `SYNCTHING_GUI_PASSWORD` in `.env` first.**
+  Compose interpolates the whole file, so until both are set *every* compose
+  command fails — including starting Immich.
+- **Make the host directories and give them to UID 1000 before starting.** The
+  container entrypoint only chowns `/var/syncthing`, not the bind-mounted
+  subdirectories, so a root-owned directory silently fails to write.
 
-```bash
-docker compose up -d
-```
+### How the credentials work
 
 `syncthing-init` runs `syncthing generate` to completion first, writing the
 device identity and the bcrypt-hashed GUI password, and only then does the
 daemon start. The GUI at `http://<host>:8384` asks for those credentials
-immediately.
+immediately, so it is never reachable unauthenticated.
 
 `.env` stays the source of truth for the password: every `docker compose up -d`
 re-applies it, so a password changed in the web UI is reverted on the next
 start. Change it in `.env` instead.
 
-### Pairing a device
+### Pairing another device
+
+The first device is covered by the first-run procedure. For every device after
+it:
 
 1. Install Syncthing on the laptop or phone and open its own GUI.
 2. On the server, *Actions → Show ID* and copy the device ID.
 3. On the client, *Add Remote Device*, paste the ID, and accept the prompt that
    appears back on the server.
-4. On the server, *Add Folder* with path `/var/syncthing/obsidian`, then share
-   it with the new device under the *Sharing* tab.
+4. Share the folder with the new device under the *Sharing* tab.
 
 Both ends must agree before anything moves — the pairing is symmetric, and a
-device you have not accepted on the server cannot pull anything.
+device you have not accepted on the server cannot pull anything. If the new
+device starts empty, set its folder to *Receive Only* until the first sync
+finishes.
 
 ### Obsidian-specific ignores
 
@@ -278,7 +291,7 @@ relying on Syncthing's public relays.
 - **Remote access**: Two documented approaches — Tailscale installed on the host (default) and a `cloudflared` container behind the `cloudflare` compose profile. Setup, trade-offs and the steps to retire the tunnel are in [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md).
 - **Pi‑hole**: Admin UI runs on port 8080 to avoid conflicts with other web services.
 - **Database**: Uses `tensorchord/pgvecto‑rs` for vector similarity search (required by Immich).
-- **Syncthing**: The GUI is published on the LAN, and Syncthing has no authentication out of the box. A one‑shot `syncthing‑init` service writes credentials from `.env` before the daemon starts, so there is never a window where the UI is open. Compose refuses to run until `SYNCTHING_GUI_USER` and `SYNCTHING_GUI_PASSWORD` are set — including for the other services.
+- **Syncthing**: First-time setup has an order that matters — see [SYNCTHING_FIRST_RUN.md](SYNCTHING_FIRST_RUN.md). The GUI is published on the LAN, and Syncthing has no authentication out of the box. A one‑shot `syncthing‑init` service writes credentials from `.env` before the daemon starts, so there is never a window where the UI is open. Compose refuses to run until `SYNCTHING_GUI_USER` and `SYNCTHING_GUI_PASSWORD` are set — including for the other services.
 
 ## License
 
