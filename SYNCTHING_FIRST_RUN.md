@@ -191,6 +191,9 @@ the container that a restart removes.**
 32. In the same dialog, click **Advanced**. Set the folder type to **Receive
     Only**. Then click **Save**.
 
+    This setting is temporary. Step 35 sets it back to Send & Receive. The rule
+    is the same at each step: the empty side is Receive Only until it is full.
+
 **CAUTION: Obey step 32 before you save. The server directory is empty. An empty
 directory can delete the files on the laptop if the two folder types are Send &
 Receive.**
@@ -212,7 +215,12 @@ Receive.**
 ## Part 5 — Add a phone
 
 Do this part after Part 4. The server now holds the vault, and the phone is
-empty.
+empty. The empty side is Receive Only again, but this time the empty side is
+the phone.
+
+**CAUTION: Before you start, make sure that the folder type on the server is
+Send & Receive. Step 35 sets it. A server that is still Receive Only sends
+nothing to the phone.**
 
 **CAUTION: The official Syncthing application for Android was discontinued in
 2024. Google Play removed the official application and the community fork,
@@ -243,8 +251,17 @@ in Google Play.**
     if you want to change the notes on the phone. A Receive Only folder cannot
     send your changes back.
 
-45. On Android, remove the battery optimization for the application. Android
-    stops a background application that it optimizes, and the sync stops too.
+45. On Android, remove the battery optimization for the application. In
+    Syncthing-Fork, also turn on the persistent notification. The notification
+    is what stops Android from killing the application.
+
+46. Expect the phone to show **Disconnected** on the server most of the time.
+    This is correct. A phone connects when the application is in the
+    foreground. It disconnects when the operating system suspends it. A recent
+    **Last seen** time tells you that the pair works.
+
+47. On iOS, know that no setting changes this. The operating system decides.
+    Open the application when you want to sync.
 
 ## After the first run
 
