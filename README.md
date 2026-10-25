@@ -41,15 +41,21 @@ All services run in Docker containers, with data stored on the host filesystem.
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `immich‑server` | 2283 | Immich API and web interface |
-| `immich‑microservices` | – | Background jobs (thumbnails, metadata, etc.) |
-| `immich‑postgres` | – | Database (PostgreSQL + vector extension) |
-| `immich‑redis` | – | Job queue |
+| `immich‑server` | 2283 | Immich API, web interface and background jobs (thumbnails, metadata, etc.) |
+| `immich‑postgres` | – | Database (PostgreSQL + VectorChord) |
+| `immich‑redis` | – | Job queue (Valkey) |
 | `pihole` | 53 (TCP/UDP), 8080 | DNS server and admin UI |
 | `cloudflared` | – | Cloudflare Tunnel agent — only with `COMPOSE_PROFILES=cloudflare` |
 | `kavita` | 5000 | Reading server for books, manga and comics |
 
-**Note**: The ML container (`immich‑machine‑learning`) is intentionally omitted; facial recognition and object detection will be unavailable unless added.
+**Note**: The ML container (`immich‑machine‑learning`) is intentionally omitted from
+`docker-compose.yaml`; facial recognition and object detection are unavailable until it
+is started from [docker-compose-ml-host.yaml](docker-compose-ml-host.yaml), on the same
+`IMMICH_VERSION` as the server.
+
+Immich is pinned to one exact release in `.env`. Upgrading it — including the
+major-version jump that removed the `immich‑microservices` container — follows the
+procedure in [IMMICH_UPGRADE.md](IMMICH_UPGRADE.md).
 
 ## Configuration
 
@@ -57,8 +63,9 @@ Key environment variables (set in `.env`):
 
 | Variable | Purpose | Example |
 |----------|---------|---------|
-| `UPLOAD_LOCATION` | Where Immich stores uploaded media | `./uploads` |
-| `IMMICH_VERSION` | Immich container tag | `release` |
+| `UPLOAD_LOCATION` | Where Immich stores uploaded media | `./immich/library` |
+| `DB_DATA_LOCATION` | Where the Immich PostgreSQL cluster lives | `./immich/pgdata` |
+| `IMMICH_VERSION` | Immich release tag, pinned exactly | `v3.3.5` |
 | `TZ` | Timezone | `America/New_York` |
 | `PIHOLE_PASSWORD` | Pi‑hole web interface password | `your‑password` |
 | `COMPOSE_PROFILES` | Remote access mode: empty for Tailscale, `cloudflare` for the tunnel | `(empty)` |
@@ -90,7 +97,7 @@ COMPOSE_PROFILES=cloudflare  # Cloudflare Tunnel
 
 All data is stored on the host via bind mounts:
 
-- `./uploads` – Immich photos/videos
+- `./immich/library` – Immich photos/videos (`UPLOAD_LOCATION`)
 - `./immich/pgdata` – PostgreSQL database
 - `./pihole/etc‑pihole` – Pi‑hole configuration
 - `./pihole/etc‑dnsmasq.d` – Pi‑hole DNS settings
@@ -195,10 +202,10 @@ transfers, install a current rsync (`brew install rsync`) and use `-s`.
 
 ## Notes
 
-- **Immich microservices**: This setup splits `immich‑server` and `immich‑microservices` for background job processing, unlike the official single‑container default.
+- **Immich version**: Pinned to an exact release (`IMMICH_VERSION` in `.env`), currently `v3.3.5`. The server container runs the background workers itself; the separate `immich‑microservices` container no longer exists. See [IMMICH_UPGRADE.md](IMMICH_UPGRADE.md).
 - **Remote access**: Two documented approaches — Tailscale installed on the host (default) and a `cloudflared` container behind the `cloudflare` compose profile. Setup, trade-offs and the steps to retire the tunnel are in [REMOTE_ACCESS_SETUP.md](REMOTE_ACCESS_SETUP.md).
 - **Pi‑hole**: Admin UI runs on port 8080 to avoid conflicts with other web services.
-- **Database**: Uses `tensorchord/pgvecto‑rs` for vector similarity search (required by Immich).
+- **Database**: Uses `ghcr.io/immich-app/postgres` (PostgreSQL 14 with VectorChord) for vector similarity search, required by Immich. v3 dropped support for the older pgvecto.rs extension, so `DB_VECTOR_EXTENSION` must stay unset.
 
 ## License
 
