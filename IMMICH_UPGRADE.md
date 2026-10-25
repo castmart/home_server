@@ -13,6 +13,19 @@ Everything below runs on the server, in the directory that holds
 `docker-compose.yaml` and `.env`. Locally you edit the repo and ship it with
 `make copy-to-host` / `make sync-to-host`.
 
+**This setup is two compose projects**, and an upgrade has to cover both:
+
+- `docker-compose.yaml` — the default project: server, database, Valkey (plus
+  Pi-hole, Kavita, Syncthing and `cloudflared`).
+- `docker-compose-ml-host.yaml` — project `immich_remote_ml`: the machine
+  learning container on port 3003.
+
+A plain `docker compose pull && docker compose up -d` touches only the first
+one. Machine learning left behind on the old version breaks smart search and
+face recognition, because the server and the ML service must run the same
+version. Both files read the same `.env`, so bumping `IMMICH_VERSION` is
+enough — but each project still has to be pulled and recreated explicitly.
+
 ## Before you start
 
 - Read the release notes of **every major version you cross**, plus the
@@ -32,6 +45,7 @@ Everything below runs on the server, in the directory that holds
 ```bash
 grep IMMICH_VERSION .env
 docker compose ps
+docker compose -f docker-compose-ml-host.yaml ps
 docker compose exec database psql -U immich -d immich -c '\dx'
 ```
 
@@ -100,11 +114,21 @@ gitignored: the server's copy has to be updated too (`make copy-to-host`).
 ```bash
 docker compose pull
 docker compose up -d --remove-orphans
+
+# Machine learning is a separate project and is not covered by the commands
+# above. Never skip it: it has to end up on the same version as the server.
+docker compose -f docker-compose-ml-host.yaml pull
+docker compose -f docker-compose-ml-host.yaml up -d
 ```
 
 `--remove-orphans` is what clears containers that the new compose file no longer
 defines — this is how the old `immich_microservices` container goes away. Without
 it, a stale container keeps running against the new database.
+
+The URL the server uses to reach the remote ML service is **not** an environment
+variable; it lives in **Administration → Settings → Machine Learning**. The
+upgrade does not require touching it, but it is the first place to look if ML
+stops answering afterwards (v3 also accepts a subpath in that URL).
 
 ## 6. Let the migrations finish
 
@@ -130,8 +154,18 @@ Then, in the web UI:
 - the version in **Administration** matches the pin,
 - a search returns results and a photo and a video both open,
 - **Administration → Job Queues** shows no failed jobs,
-- machine learning (started separately from `docker-compose-ml-host.yaml`, on
-  the same `IMMICH_VERSION`) answers for Smart Search and Face Detection.
+- a semantic search returns results — that is the end-to-end check that the ML
+  service answers and is on a version the server understands.
+
+Machine learning is verified on its own project:
+
+```bash
+docker compose -f docker-compose-ml-host.yaml ps
+docker compose -f docker-compose-ml-host.yaml logs -f immich-machine-learning
+```
+
+The first requests after an upgrade can be slow while models are downloaded
+again into the `model-cache` volume.
 
 Old images can be reclaimed afterwards with `docker image prune`.
 
@@ -144,6 +178,7 @@ directory has to go. Note the service names: a blanket `docker compose down -v`
 would also take down Pi-hole, Kavita and Syncthing.
 
 ```bash
+docker compose -f docker-compose-ml-host.yaml down   # no -v: keep model-cache
 docker compose rm -sf immich-server redis database
 rm -rf ./immich/pgdata                 # CAUTION: wipes the database only
 # put the previous IMMICH_VERSION back in .env
@@ -155,7 +190,15 @@ gunzip --stdout ~/immich-backup/immich-<date>-pre-upgrade.sql.gz \
   | docker exec -i immich_postgres psql --dbname=immich --username=immich \
       --single-transaction --set ON_ERROR_STOP=on
 docker compose up -d
+docker compose -f docker-compose-ml-host.yaml pull
+docker compose -f docker-compose-ml-host.yaml up -d
 ```
+
+Roll back **both** projects: the version pin in `.env` is shared, so the ML
+project has to be pulled and recreated again after the edit, exactly as in step
+5. Keep `-v` off that `down` — `model-cache` is a volume of the
+`immich_remote_ml` project, and wiping it throws away every downloaded model.
+They are re-downloaded automatically, but the first searches afterwards are slow.
 
 If the server starts and runs migrations before the restore finishes, set
 `DB_SKIP_MIGRATIONS=true` in `.env` for the restore and remove it afterwards.
@@ -171,7 +214,8 @@ If the server starts and runs migrations before the restore finishes, set
 | Postgres image pinned by digest, `POSTGRES_INITDB_ARGS: '--data-checksums'` added | Matches upstream. The image tag itself was already the VectorChord one, so no vector-extension migration was needed; `--data-checksums` only applies to a freshly initialised cluster. |
 | `DB_DATA_LOCATION` introduced | The database path is configuration, not a hardcoded mount. Default `./immich/pgdata` keeps the existing data in place. |
 | `healthcheck: disable: false` on server, database and Valkey | The images ship their own health checks; enabling them makes `docker compose ps` meaningful. |
-| `IMMICH_VERSION` `v2.7.5` → `v3.3.5` | The upgrade itself. |
+| `IMMICH_VERSION` `v2.7.5` → `v3.3.5` | The upgrade itself — for both compose projects, since both read this variable. |
+| Deprecated `MACHINE_LEARNING_*` environment variables dropped in v3 | Nothing to do here: this setup sets none of them, and the remaining ML tuning lives in the admin UI. |
 
 One v3 detail worth knowing after the fact: assets imported before v3 need a
 **Metadata Extraction** re-run before real-time (HLS) transcoding will work for
