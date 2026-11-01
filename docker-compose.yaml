@@ -75,6 +75,53 @@ services:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:-}
     restart: unless-stopped
 
+  # ── Syncthing ────────────────────────────────────────
+  # One-shot credential bootstrap. Runs to completion before the daemon
+  # starts, so the GUI on :8384 is never reachable without authentication —
+  # the image defaults to STGUIADDRESS=0.0.0.0:8384 and Syncthing ships with
+  # auth disabled. `generate` is idempotent: it validates and upgrades an
+  # existing config and leaves the device certificate and ID untouched.
+  syncthing-init:
+    container_name: syncthing_init
+    image: syncthing/syncthing:${SYNCTHING_VERSION:-latest}
+    # Same hostname as the daemon: `generate` writes the device name into
+    # config.xml from the hostname of the container it runs in, and the daemon
+    # then reads the stored name. Without this the device is named after the
+    # bootstrap container's random id.
+    hostname: ${SYNCTHING_HOSTNAME:-servidor}
+    environment:
+      PUID: ${SYNCTHING_PUID:-1000}
+      PGID: ${SYNCTHING_PGID:-1000}
+    command:
+      - generate
+      - --home=/var/syncthing/config
+      - --gui-user=${SYNCTHING_GUI_USER:?set SYNCTHING_GUI_USER in .env}
+      - --gui-password=${SYNCTHING_GUI_PASSWORD:?set SYNCTHING_GUI_PASSWORD in .env}
+    volumes:
+      - ./syncthing/config:/var/syncthing/config
+    restart: 'no'
+
+  syncthing:
+    container_name: syncthing
+    image: syncthing/syncthing:${SYNCTHING_VERSION:-latest}
+    hostname: ${SYNCTHING_HOSTNAME:-servidor}
+    depends_on:
+      syncthing-init:
+        condition: service_completed_successfully
+    environment:
+      PUID: ${SYNCTHING_PUID:-1000}
+      PGID: ${SYNCTHING_PGID:-1000}
+      TZ: ${TZ}
+    volumes:
+      - ./syncthing/config:/var/syncthing/config
+      - ${OBSIDIAN_PATH:-/mnt/data/syncthing/obsidian}:/var/syncthing/obsidian
+    ports:
+      - '8384:8384'          # web GUI (LAN) — credentials enforced by syncthing-init
+      - '22000:22000/tcp'    # sync protocol
+      - '22000:22000/udp'    # sync protocol (QUIC)
+      - '21027:21027/udp'    # local discovery broadcasts
+    restart: unless-stopped
+
   # ── Kavita ────────────────────────────────
   kavita:
     image: jvmilazz0/kavita:latest    # Using the stable branch from the official dockerhub repo.

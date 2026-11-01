@@ -86,6 +86,7 @@ sync-to-host:
 		--exclude 'uploads' \
 		--exclude 'pihole/etc-pihole' \
 		--exclude 'pihole/etc-dnsmasq.d' \
+		--exclude 'syncthing/config' \
 		./ $(REMOTE):$(DEST_DIR)/
 	@echo "Sync complete"
 
