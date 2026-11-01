@@ -115,7 +115,7 @@ make remote‑status SSH_HOST=your‑server
 make remote‑up SSH_HOST=your‑server
 ```
 
-Pass `SSH_KEY=~/.ssh/id_ecdsa` to any target to select an identity; it also sets
+Pass `SSH_KEY=~/.ssh/id_rsa` to any target to select an identity; it also sets
 `IdentitiesOnly=yes`, so a crowded `~/.ssh` cannot exhaust the server's
 authentication attempt limit before the right key is offered.
 
@@ -146,33 +146,67 @@ not from the filename — a wrong title is fixed in the file or in Kavita's
 *Edit Series* dialog, not by renaming. Filenames still matter for ordering:
 number them `Vol. 01`, `Vol. 02` if you want a reliable reading order.
 
-### Add a single book
+### Upload, step by step
 
-```bash
-make add-book SSH_HOST=homeserver AUTHOR='Gary Jennings' BOOK=~/Downloads/Azteca.epub
-```
+The host is `naspi`, reached on the LAN as **`naspi.local`** (the bare name no
+longer resolves) and only with **`~/.ssh/id_rsa`** — `id_ecdsa` is rejected.
 
-Add `SERIES=` when the book belongs to one, and `SHELF=manga` or `SHELF=comics`
-to target another shelf. `SSH_KEY=~/.ssh/id_ecdsa` picks a specific identity.
+1. **Trust `naspi.local` once.** `known_hosts` only has the key under `naspi`,
+   so the first `scp` to `naspi.local` would stop at a host-key prompt. Confirm
+   both names serve the same key, then record it:
 
-### Add a whole series
+   ```bash
+   ssh-keyscan -t ed25519 naspi.local 2>/dev/null | cut -d' ' -f2-
+   ssh-keygen -F naspi | grep ed25519 | cut -d' ' -f2-   # must match the line above
+   echo "naspi.local $(ssh-keyscan -t ed25519 naspi.local 2>/dev/null | cut -d' ' -f2-)" >> ~/.ssh/known_hosts
+   ```
 
-Put the files in one local folder, then upload the folder's contents:
+2. **Read each book's author from its metadata**, not its filename — download
+   names are often mangled (`Slavoj iek` for *Slavoj Žižek*). `AUTHOR` becomes
+   the folder name:
 
-```bash
-make add-series SSH_HOST=homeserver AUTHOR='Gary Jennings' SERIES=Azteca SRC=~/Downloads/azteca
-```
+   ```bash
+   f=~/Downloads/Libros/book.epub
+   opf=$(unzip -p "$f" META-INF/container.xml | grep -o 'full-path="[^"]*"' | cut -d'"' -f2)
+   unzip -p "$f" "$opf" | grep -oE '<dc:(title|creator)[^>]*>[^<]*'
+   ```
 
-### Then scan
+3. **Upload.** One book:
 
-Open Kavita at `http://<host>:5000`, pick the library and run **Scan Library**.
-Kavita also scans on its own schedule, so new files appear eventually without it.
+   ```bash
+   make add-book SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' BOOK=~/Downloads/Azteca.epub
+   ```
 
-### Checking and permissions
+   Add `SERIES=` when the book belongs to one, and `SHELF=manga` or
+   `SHELF=comics` to target another shelf. For a folder that is one series:
 
-```bash
-make kavita-ls SSH_HOST=homeserver SHELF=books
-```
+   ```bash
+   make add-series SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' SERIES=Azteca SRC=~/Downloads/azteca
+   ```
+
+   For several loose books by different authors, call `add-book` once per file.
+   Wrap it in a function rather than a variable: zsh does not word-split
+   `$M` in `M="make add-book ..."; $M ...`, so that form fails with
+   *no such file or directory*.
+
+   ```bash
+   up() { make -s add-book SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR="$1" BOOK="$2"; }
+   up 'Terry Eagleton' ~/Downloads/Libros/Humor.epub
+   up 'Slavoj Žižek'  ~/Downloads/Libros/Contragolpe.epub
+   ```
+
+4. **Verify** the files arrived and the container sees them:
+
+   ```bash
+   make kavita-ls SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa SHELF=books
+   ssh -i ~/.ssh/id_rsa naspi.local 'docker exec kavita ls /books'
+   ```
+
+5. **Scan.** Open Kavita at `http://naspi.local:5000`, pick the library and run
+   **Scan Library**. Kavita also scans on its own schedule, so new files appear
+   eventually without it.
+
+### Permissions
 
 The Kavita container runs as root in this compose, so it can read anything you
 upload regardless of owner — uploads do not need a `chown`. The reverse case is
@@ -181,7 +215,7 @@ edit or delete them from your own account. `make kavita-perms` hands a path
 back:
 
 ```bash
-make kavita-perms SSH_HOST=homeserver AUTHOR='Gary Jennings' SERIES=Azteca
+make kavita-perms SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' SERIES=Azteca
 ```
 
 ### Why scp and not rsync
