@@ -148,18 +148,12 @@ number them `Vol. 01`, `Vol. 02` if you want a reliable reading order.
 
 ### Upload, step by step
 
-The host is `naspi`, reached on the LAN as **`naspi.local`** (the bare name no
-longer resolves) and only with **`~/.ssh/id_rsa`** — `id_ecdsa` is rejected.
+The host is **`naspi`**, and it only accepts **`~/.ssh/id_rsa`** (`id_ecdsa`
+is rejected).
 
-1. **Trust `naspi.local` once.** `known_hosts` only has the key under `naspi`,
-   so the first `scp` to `naspi.local` would stop at a host-key prompt. Confirm
-   both names serve the same key, then record it:
-
-   ```bash
-   ssh-keyscan -t ed25519 naspi.local 2>/dev/null | cut -d' ' -f2-
-   ssh-keygen -F naspi | grep ed25519 | cut -d' ' -f2-   # must match the line above
-   echo "naspi.local $(ssh-keyscan -t ed25519 naspi.local 2>/dev/null | cut -d' ' -f2-)" >> ~/.ssh/known_hosts
-   ```
+1. **Turn off any VPN** (Surfshark, etc.) first. While a VPN is connected the
+   router's DNS is bypassed and `naspi` stops resolving
+   (`Could not resolve hostname naspi`).
 
 2. **Read each book's author from its metadata**, not its filename — download
    names are often mangled (`Slavoj iek` for *Slavoj Žižek*). `AUTHOR` becomes
@@ -174,14 +168,14 @@ longer resolves) and only with **`~/.ssh/id_rsa`** — `id_ecdsa` is rejected.
 3. **Upload.** One book:
 
    ```bash
-   make add-book SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' BOOK=~/Downloads/Azteca.epub
+   make add-book SSH_HOST=naspi SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' BOOK=~/Downloads/Azteca.epub
    ```
 
    Add `SERIES=` when the book belongs to one, and `SHELF=manga` or
    `SHELF=comics` to target another shelf. For a folder that is one series:
 
    ```bash
-   make add-series SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' SERIES=Azteca SRC=~/Downloads/azteca
+   make add-series SSH_HOST=naspi SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' SERIES=Azteca SRC=~/Downloads/azteca
    ```
 
    For several loose books by different authors, call `add-book` once per file.
@@ -190,7 +184,7 @@ longer resolves) and only with **`~/.ssh/id_rsa`** — `id_ecdsa` is rejected.
    *no such file or directory*.
 
    ```bash
-   up() { make -s add-book SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR="$1" BOOK="$2"; }
+   up() { make -s add-book SSH_HOST=naspi SSH_KEY=~/.ssh/id_rsa AUTHOR="$1" BOOK="$2"; }
    up 'Terry Eagleton' ~/Downloads/Libros/Humor.epub
    up 'Slavoj Žižek'  ~/Downloads/Libros/Contragolpe.epub
    ```
@@ -198,11 +192,11 @@ longer resolves) and only with **`~/.ssh/id_rsa`** — `id_ecdsa` is rejected.
 4. **Verify** the files arrived and the container sees them:
 
    ```bash
-   make kavita-ls SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa SHELF=books
-   ssh -i ~/.ssh/id_rsa naspi.local 'docker exec kavita ls /books'
+   make kavita-ls SSH_HOST=naspi SSH_KEY=~/.ssh/id_rsa SHELF=books
+   ssh -i ~/.ssh/id_rsa naspi 'docker exec kavita ls /books'
    ```
 
-5. **Scan.** Open Kavita at `http://naspi.local:5000`, pick the library and run
+5. **Scan.** Open Kavita at `http://naspi:5000`, pick the library and run
    **Scan Library**. Kavita also scans on its own schedule, so new files appear
    eventually without it.
 
@@ -215,7 +209,7 @@ edit or delete them from your own account. `make kavita-perms` hands a path
 back:
 
 ```bash
-make kavita-perms SSH_HOST=naspi.local SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' SERIES=Azteca
+make kavita-perms SSH_HOST=naspi SSH_KEY=~/.ssh/id_rsa AUTHOR='Gary Jennings' SERIES=Azteca
 ```
 
 ### Why scp and not rsync
